@@ -40,7 +40,6 @@ export interface CompletedTrick {
 
 export interface DeclareContractInput {
   contractCode: ContractCode;
-  subMethod?: SubMethodCode;
   partnerCard?: { rank: PartnerCardRank; suit: Suit };
   trumpSuit?: Suit; // only for trumpMode === 'free'
 }
@@ -94,9 +93,9 @@ export class HandStateMachine {
     this.bidding = createBiddingState(dealerSeat, bidFloorRank);
   }
 
-  placeBid(seat: SeatIndex, contractCode: ContractCode | null): void {
+  placeBid(seat: SeatIndex, contractCode: ContractCode | null, subMethod?: SubMethodCode): void {
     if (this.phase !== "bidding") throw new IllegalActionError("not in bidding phase");
-    this.bidding = placeBidPure(this.bidding, seat, contractCode);
+    this.bidding = placeBidPure(this.bidding, seat, contractCode, subMethod);
     if (!this.bidding.isComplete) return;
     if (this.bidding.allPassed) {
       this.phase = "all_passed";
@@ -105,6 +104,7 @@ export class HandStateMachine {
     const winner = this.bidding.winner!;
     this.declarerSeat = winner.seat;
     this.contractCode = winner.contractCode;
+    this.subMethodCode = winner.subMethod;
     this.phase = "declaration";
   }
 
@@ -120,10 +120,10 @@ export class HandStateMachine {
       throw new IllegalActionError("contractCode must match the winning bid");
     }
     const contract = getContract(this.contractCode!);
+    // contract.trumpMode === "submethod_only" is already satisfied at this
+    // point — the sub-method was locked in when the bid itself was placed
+    // (see bidding.ts), not chosen here.
 
-    if (contract.trumpMode === "submethod_only" && !input.subMethod) {
-      throw new IllegalActionError("this contract requires a sub-method (sans/half/tip/strong)");
-    }
     if (contract.trumpMode === "free" && !input.trumpSuit) {
       throw new IllegalActionError("this contract requires declarer to freely choose a trump suit");
     }
@@ -131,7 +131,6 @@ export class HandStateMachine {
       throw new IllegalActionError("this contract requires a named partner card");
     }
 
-    this.subMethodCode = input.subMethod;
     this.namedPartnerCard = input.partnerCard;
 
     if (contract.isSolo) {
@@ -140,7 +139,9 @@ export class HandStateMachine {
       return;
     }
 
-    const revealImmediately = input.subMethod ? getSubMethod(input.subMethod).partnerRevealTiming === "immediate" : false;
+    const revealImmediately = this.subMethodCode
+      ? getSubMethod(this.subMethodCode).partnerRevealTiming === "immediate"
+      : false;
     this.partnerResolution = resolvePartnerCard(
       this.declarerSeat!,
       input.partnerCard!,
@@ -156,7 +157,7 @@ export class HandStateMachine {
     }
 
     // submethod_only
-    const subMethod = getSubMethod(input.subMethod!);
+    const subMethod = getSubMethod(this.subMethodCode!);
     switch (subMethod.trumpResolution) {
       case "none":
         this.trumpSuit = null;

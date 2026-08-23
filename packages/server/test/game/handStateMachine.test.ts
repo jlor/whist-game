@@ -52,14 +52,20 @@ function nextSeat(seat: SeatIndex): SeatIndex {
 
 /** Drives the auction to completion: bidderSeat bids once (on its turn),
  * every other seat passes, until 3 passes in a row close the auction. */
-function bidAllPassExcept(hsm: HandStateMachine, dealerSeat: SeatIndex, bidderSeat: SeatIndex, contractCode: any) {
+function bidAllPassExcept(
+  hsm: HandStateMachine,
+  dealerSeat: SeatIndex,
+  bidderSeat: SeatIndex,
+  contractCode: any,
+  subMethod?: any
+) {
   let seat = nextSeat(dealerSeat);
   let bidPlaced = false;
   let guard = 0;
   while (hsm.phase === "bidding") {
     if (++guard > 20) throw new Error("bidding did not terminate");
     if (seat === bidderSeat && !bidPlaced) {
-      hsm.placeBid(seat, contractCode);
+      hsm.placeBid(seat, contractCode, subMethod);
       bidPlaced = true;
     } else {
       hsm.placeBid(seat, null);
@@ -134,7 +140,7 @@ describe("HandStateMachine — solo outcome via self-held partner card", () => {
 
 describe("HandStateMachine — sol contract (structurally solo, no partner mechanic)", () => {
   it("goes straight from declaration to kitty exchange, no partner involved", () => {
-    const hsm = new HandStateMachine(0, undefined, 1); // lower the bid floor so sol (rank 1) is biddable
+    const hsm = new HandStateMachine(0, undefined, 4); // lower the bid floor so sol (rank 4) is biddable
     const { hands, kitty } = sequentialDeal();
     forceDeal(hsm, hands, kitty);
 
@@ -159,10 +165,9 @@ describe("HandStateMachine — tip sub-method", () => {
     const { hands, kitty } = sequentialDeal();
     forceDeal(hsm, hands, kitty);
 
-    bidAllPassExcept(hsm, 0, 1, "ten_plus");
+    bidAllPassExcept(hsm, 0, 1, "ten_plus", "tip");
     hsm.declareContract({
       contractCode: "ten_plus",
-      subMethod: "tip",
       partnerCard: { rank: "A", suit: "diamonds" },
     });
 
@@ -193,10 +198,9 @@ describe("HandStateMachine — half sub-method", () => {
     const { hands, kitty } = sequentialDeal();
     forceDeal(hsm, hands, kitty);
 
-    bidAllPassExcept(hsm, 0, 1, "nine_plus");
+    bidAllPassExcept(hsm, 0, 1, "nine_plus", "half");
     hsm.declareContract({
       contractCode: "nine_plus",
-      subMethod: "half",
       partnerCard: { rank: "A", suit: "clubs" },
     });
 

@@ -20,7 +20,7 @@ const EVENT_NAMES = [
   "trump:yourTurnToChoose",
   "trump:kittyCardRevealed",
   "trump:resolved",
-  "kitty:cards",
+  "kitty:awaiting",
   "kitty:resolved",
   "hand:exposed",
   "play:turnChanged",
@@ -40,11 +40,10 @@ interface GameContextValue {
     createTable: (name: string) => Promise<{ tableId: string; code: string }>;
     takeSeat: (seatIndex: number) => void;
     leaveSeat: () => void;
-    startSession: () => void;
-    placeBid: (contractCode: string | null) => void;
+    startSession: (bidFloorRank?: number) => void;
+    placeBid: (contractCode: string | null, subMethod?: string) => void;
     declareContract: (input: {
       contractCode: string;
-      subMethod?: string;
       partnerCard?: { rank: string; suit: string };
       trumpSuit?: string;
     }) => void;
@@ -53,7 +52,7 @@ interface GameContextValue {
     choosePartnerTrump: (suit: string) => void;
     performKittyExchange: (discard: string[] | null) => void;
     playCard: (card: string) => void;
-    hostAction: (action: "continueSession" | "closeTable") => void;
+    hostAction: (action: "continueSession" | "closeTable", bidFloorRank?: number) => void;
   };
 }
 
@@ -84,8 +83,8 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
         new Promise((resolve) => getSocket().emit("lobby:createTable", { name }, resolve)),
       takeSeat: (seatIndex) => getSocket().emit("table:takeSeat", { seatIndex }),
       leaveSeat: () => getSocket().emit("table:leaveSeat"),
-      startSession: () => getSocket().emit("table:startSession"),
-      placeBid: (contractCode) => getSocket().emit("bid:place", { contractCode }),
+      startSession: (bidFloorRank) => getSocket().emit("table:startSession", { bidFloorRank }),
+      placeBid: (contractCode, subMethod) => getSocket().emit("bid:place", { contractCode, subMethod }),
       declareContract: (input) => getSocket().emit("contract:declare", input),
       revealNextTipCard: () => getSocket().emit("trump:revealNext"),
       stopTipReveal: () => getSocket().emit("trump:stopReveal"),
@@ -93,7 +92,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       performKittyExchange: (discard) =>
         getSocket().emit("kitty:decision", { exchange: discard !== null, discard: discard ?? [] }),
       playCard: (card) => getSocket().emit("play:card", { card }),
-      hostAction: (action) => getSocket().emit("table:hostAction", { action }),
+      hostAction: (action, bidFloorRank) => getSocket().emit("table:hostAction", { action, bidFloorRank }),
     }),
     []
   );

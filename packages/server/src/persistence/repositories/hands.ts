@@ -62,10 +62,11 @@ export function recordBid(
   handId: string,
   seat: SeatIndex,
   bidOrder: number,
-  contractCode: string | null
+  contractCode: string | null,
+  subMethod?: string
 ): void {
   db.insert(bids)
-    .values({ id: nanoid(), handId, seat, bidOrder, contractCode, isPass: contractCode === null })
+    .values({ id: nanoid(), handId, seat, bidOrder, contractCode, subMethod, isPass: contractCode === null })
     .run();
 }
 

@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { SUITS, type Suit } from "@whist/shared";
+import { type Suit } from "@whist/shared";
 import { useGame } from "../../state/GameStateProvider.js";
 import { formatCard } from "../../cardDisplay.js";
+import SuitPicker from "./SuitPicker.js";
 
 export default function TrumpTipRevealPanel() {
   const { state, actions } = useGame();
-  const [suit, setSuit] = useState<Suit>("clubs");
+  const [suit, setSuit] = useState<Suit | null>(null);
 
   if (state.phase !== "trump_resolution") return null;
 
@@ -37,14 +38,10 @@ export default function TrumpTipRevealPanel() {
 
       {state.awaitingTrumpChoice && (
         <div className="actions">
-          <select value={suit} onChange={(e) => setSuit(e.target.value as Suit)}>
-            {SUITS.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-          <button onClick={() => actions.choosePartnerTrump(suit)}>Choose trump</button>
+          <SuitPicker value={suit} onChange={setSuit} />
+          <button disabled={!suit} onClick={() => actions.choosePartnerTrump(suit!)}>
+            Choose trump
+          </button>
         </div>
       )}
 

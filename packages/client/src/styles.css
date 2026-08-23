@@ -167,3 +167,58 @@ select {
   max-height: 8rem;
   overflow-y: auto;
 }
+
+.suit-picker {
+  display: flex;
+  gap: 0.4rem;
+  margin: 0.4rem 0;
+}
+
+.suit-button {
+  background: white;
+  border-radius: 6px;
+  padding: 0.5rem 0.9rem;
+  font-size: 1.4rem;
+  font-weight: bold;
+  border: 1px solid #999;
+  cursor: pointer;
+}
+
+.suit-button.selected {
+  outline: 3px solid gold;
+}
+
+.partner-card-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0.4rem 0;
+}
+
+.partner-card-rank-row {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.bid-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.bid-tier-group {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+  border: 1px solid #555;
+  border-radius: 6px;
+  padding: 0.3rem;
+}
+
+.bid-tier-label {
+  font-size: 0.85em;
+  opacity: 0.8;
+  margin-right: 0.2rem;
+}

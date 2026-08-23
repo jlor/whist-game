@@ -52,6 +52,7 @@ export const bids = sqliteTable("bids", {
   seat: integer("seat").notNull(),
   bidOrder: integer("bid_order").notNull(),
   contractCode: text("contract_code"),
+  subMethod: text("sub_method"),
   isPass: integer("is_pass", { mode: "boolean" }).notNull(),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });

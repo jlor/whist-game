@@ -60,6 +60,7 @@ export function runMigrations(): void {
       seat INTEGER NOT NULL,
       bid_order INTEGER NOT NULL,
       contract_code TEXT,
+      sub_method TEXT,
       is_pass INTEGER NOT NULL,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
@@ -124,6 +125,17 @@ export function runMigrations(): void {
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
   `);
+
+  addColumnIfMissing("bids", "sub_method", "TEXT");
+}
+
+/** Idempotent column addition for schema changes on an existing DB —
+ * CREATE TABLE IF NOT EXISTS above doesn't touch tables that already exist. */
+function addColumnIfMissing(table: string, column: string, type: string): void {
+  const columns = sqlite.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!columns.some((c) => c.name === column)) {
+    sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  }
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

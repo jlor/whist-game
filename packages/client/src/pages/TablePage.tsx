@@ -10,6 +10,7 @@ import HandOfCards from "../components/Table/HandOfCards.js";
 import TrickArea from "../components/Table/TrickArea.js";
 import Scoreboard from "../components/Table/Scoreboard.js";
 import PartnerRevealToast from "../components/Table/PartnerRevealToast.js";
+import BidFloorPicker from "../components/Table/BidFloorPicker.js";
 
 export default function TablePage() {
   const { code } = useParams<{ code: string }>();
@@ -32,8 +33,11 @@ export default function TablePage() {
       <PartnerRevealToast />
       <SeatsRing />
 
-      {state.tableStatus === "lobby" && state.seats.every((s) => s !== null) && (
-        <button onClick={() => actions.startSession()}>Start session</button>
+      {state.tableStatus === "lobby" && state.seats.every((s) => s !== null) && state.amHost && (
+        <BidFloorPicker defaultRank={state.bidFloorRank} onStart={(rank) => actions.startSession(rank)} label="Start session" />
+      )}
+      {state.tableStatus === "lobby" && state.seats.every((s) => s !== null) && !state.amHost && (
+        <p>Waiting on the host to start the session…</p>
       )}
 
       <BiddingPanel />

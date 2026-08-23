@@ -75,19 +75,18 @@ export function createSocketServer(httpServer: HttpServer): Server {
       guard(() => requireTable().leaveSeat(userId));
     });
 
-    socket.on("table:startSession", () => {
-      guard(() => requireTable().startSession(userId));
+    socket.on("table:startSession", (payload) => {
+      guard(() => requireTable().startSession(userId, payload?.bidFloorRank));
     });
 
-    socket.on("bid:place", ({ contractCode }) => {
-      guard(() => requireTable().placeBid(userId, contractCode ?? null));
+    socket.on("bid:place", ({ contractCode, subMethod }) => {
+      guard(() => requireTable().placeBid(userId, contractCode ?? null, subMethod));
     });
 
     socket.on("contract:declare", (input) => {
       guard(() => {
         const parsed = {
           contractCode: input.contractCode,
-          subMethod: input.subMethod,
           trumpSuit: input.trumpSuit,
           partnerCard: input.partnerCard,
         };
@@ -118,8 +117,8 @@ export function createSocketServer(httpServer: HttpServer): Server {
       guard(() => requireTable().playCard(userId, decodeCard(card)));
     });
 
-    socket.on("table:hostAction", ({ action }) => {
-      guard(() => requireTable().hostAction(userId, action));
+    socket.on("table:hostAction", ({ action, bidFloorRank }) => {
+      guard(() => requireTable().hostAction(userId, action, bidFloorRank));
     });
 
     function requireTable() {

@@ -42,28 +42,35 @@ export const TableSummary = z.object({
 // ---- Table room ----
 
 export const TakeSeatRequest = z.object({ seatIndex: SeatIndex });
-export const StartSessionRequest = z.object({});
+export const StartSessionRequest = z.object({ bidFloorRank: z.number().int().min(1).optional() });
 
 export const HostAction = z.object({
   action: z.enum(["continueSession", "closeTable"]),
+  bidFloorRank: z.number().int().min(1).optional(),
 });
 
 // ---- Bidding ----
+// A `submethod_only` tier (8+/9+/10+/11+/12+/13+) requires naming a
+// sub-method as part of the bid itself — the 4 sub-methods have no order
+// among themselves, see CONTRACT_LADDER's doc comment in contracts.config.ts.
 
 export const PlaceBidRequest = z.object({
   contractCode: ContractCode.nullable(), // null = pass
+  subMethod: SubMethodCode.optional(),
 });
 
 export const BidPlacedEvent = z.object({
   seat: SeatIndex,
   contractCode: ContractCode.nullable(),
+  subMethod: SubMethodCode.optional(),
   isPass: z.boolean(),
 });
 
 // ---- Contract declaration ----
+// Sub-method is NOT part of declaration anymore — it was already locked in
+// by the winning bid.
 
 export const DeclareContractRequest = z.object({
-  subMethod: SubMethodCode.optional(),
   partnerCard: z
     .object({ rank: PartnerCardRank, suit: Suit })
     .optional(),
@@ -89,8 +96,11 @@ export const ChooseTrumpRequest = z.object({ suit: Suit });
 export const TrumpResolvedEvent = z.object({ trumpSuit: Suit.optional() });
 
 // ---- Kitty exchange ----
+// The kitty stays hidden until exchanged — this event never carries card
+// contents, only who must decide. Any cards already shown via a `tip`
+// reveal are separately public via trump:kittyCardRevealed.
 
-export const KittyCardsEvent = z.object({ cards: z.array(CardCode).length(3) });
+export const KittyAwaitingEvent = z.object({ seat: SeatIndex });
 export const KittyDecisionRequest = z.object({ exchange: z.boolean() });
 export const KittyResolvedEvent = z.object({ exchanged: z.boolean() });
 

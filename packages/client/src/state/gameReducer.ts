@@ -6,6 +6,7 @@ export interface SeatOccupant {
 export interface BidEntry {
   seat: number;
   contractCode: string | null;
+  subMethod?: string;
   isPass: boolean;
 }
 
@@ -37,6 +38,9 @@ export interface GameState {
   tableStatus: "lobby" | "active" | "finished" | null;
   seats: (SeatOccupant | null)[];
   mySeat: number | null;
+  hostUserId: string | null;
+  amHost: boolean;
+  bidFloorRank: number | null;
 
   phase: string | null;
   dealerSeat: number | null;
@@ -46,7 +50,7 @@ export interface GameState {
   biddingTurnSeat: number | null;
   playTurnSeat: number | null;
   bids: BidEntry[];
-  highBid: { seat: number; contractCode: string } | null;
+  highBid: { seat: number; contractCode: string; subMethod?: string } | null;
 
   declarerSeat: number | null;
   contractCode: string | null;
@@ -61,7 +65,9 @@ export interface GameState {
   awaitingTipStop: boolean;
   awaitingTrumpChoice: boolean;
 
-  kittyCards: string[] | null;
+  /** The kitty is never sent to the client until it's exchanged — this is
+   * just who must decide, never card contents. */
+  kittyAwaitingSeat: number | null;
   kittyResolved: boolean | null;
 
   exposedHand: { seat: number; level: string; cards: string[] } | null;
@@ -84,6 +90,9 @@ export const initialGameState: GameState = {
   tableStatus: null,
   seats: [null, null, null, null],
   mySeat: null,
+  hostUserId: null,
+  amHost: false,
+  bidFloorRank: null,
   phase: null,
   dealerSeat: null,
   handNumber: null,
@@ -103,7 +112,7 @@ export const initialGameState: GameState = {
   tipReveals: [],
   awaitingTipStop: false,
   awaitingTrumpChoice: false,
-  kittyCards: null,
+  kittyAwaitingSeat: null,
   kittyResolved: null,
   exposedHand: null,
   currentTrick: [],
@@ -122,7 +131,7 @@ export type GameAction =
   | { type: "bid:yourTurn" }
   | { type: "bid:turnChanged"; payload: { seat: number } }
   | { type: "bid:placed"; payload: BidEntry }
-  | { type: "bid:won"; payload: { seat: number; contractCode: string } }
+  | { type: "bid:won"; payload: { seat: number; contractCode: string; subMethod?: string } }
   | { type: "bid:allPassedRedeal" }
   | { type: "contract:yourTurnToDeclare"; payload: { eligiblePartnerCardRanks: string[] } }
   | { type: "contract:declared"; payload: any }
@@ -132,7 +141,7 @@ export type GameAction =
   | { type: "trump:yourTurnToChoose" }
   | { type: "trump:kittyCardRevealed"; payload: { card: string; index: number } }
   | { type: "trump:resolved"; payload: { trumpSuit?: string } }
-  | { type: "kitty:cards"; payload: { cards: string[] } }
+  | { type: "kitty:awaiting"; payload: { seat: number } }
   | { type: "kitty:resolved"; payload: { exchanged: boolean } }
   | { type: "hand:exposed"; payload: { seat: number; level: string; cards: string[] } }
   | { type: "play:turnChanged"; payload: { seat: number } }
@@ -167,6 +176,9 @@ export function createGameReducer(myUserId: string | null) {
           tableStatus: p.status,
           seats: p.seats,
           mySeat: computeMySeat(p.seats, myUserId),
+          hostUserId: p.hostUserId,
+          amHost: p.hostUserId === myUserId,
+          bidFloorRank: p.bidFloorRank,
           phase: p.phase,
         };
       }
@@ -180,6 +192,9 @@ export function createGameReducer(myUserId: string | null) {
           tableStatus: "active",
           seats: state.seats,
           mySeat: state.mySeat,
+          hostUserId: state.hostUserId,
+          amHost: state.amHost,
+          bidFloorRank: state.bidFloorRank,
           phase: "bidding",
           dealerSeat: action.payload.dealerSeat,
           handNumber: action.payload.handNumber,
@@ -198,12 +213,18 @@ export function createGameReducer(myUserId: string | null) {
         const bids = [...state.bids, action.payload];
         const highBid = action.payload.isPass
           ? state.highBid
-          : { seat: action.payload.seat, contractCode: action.payload.contractCode! };
+          : { seat: action.payload.seat, contractCode: action.payload.contractCode!, subMethod: action.payload.subMethod };
         return { ...state, bids, highBid };
       }
 
       case "bid:won":
-        return { ...state, phase: "declaration", declarerSeat: action.payload.seat, contractCode: action.payload.contractCode };
+        return {
+          ...state,
+          phase: "declaration",
+          declarerSeat: action.payload.seat,
+          contractCode: action.payload.contractCode,
+          subMethod: action.payload.subMethod ?? null,
+        };
 
       case "bid:allPassedRedeal":
         return { ...state, phase: "bidding", bids: [], highBid: null };
@@ -244,11 +265,11 @@ export function createGameReducer(myUserId: string | null) {
           awaitingTrumpChoice: false,
         };
 
-      case "kitty:cards":
-        return { ...state, phase: "kitty_exchange", kittyCards: action.payload.cards };
+      case "kitty:awaiting":
+        return { ...state, phase: "kitty_exchange", kittyAwaitingSeat: action.payload.seat };
 
       case "kitty:resolved":
-        return { ...state, kittyResolved: action.payload.exchanged, kittyCards: null };
+        return { ...state, kittyResolved: action.payload.exchanged, kittyAwaitingSeat: null };
 
       case "hand:exposed":
         return { ...state, exposedHand: action.payload, phase: "play" };

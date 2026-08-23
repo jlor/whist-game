@@ -1,5 +1,6 @@
 import { getContract } from "@whist/shared";
 import { useGame } from "../../state/GameStateProvider.js";
+import BidFloorPicker from "./BidFloorPicker.js";
 
 function nameFor(state: ReturnType<typeof useGame>["state"], userId: string): string {
   const occ = state.seats.find((s) => s?.userId === userId);
@@ -38,7 +39,15 @@ export default function Scoreboard() {
               </li>
             ))}
           </ul>
-          <button onClick={() => actions.hostAction("continueSession")}>Continue session (host)</button>
+          {state.amHost ? (
+            <BidFloorPicker
+              defaultRank={state.bidFloorRank}
+              onStart={(rank) => actions.hostAction("continueSession", rank)}
+              label="Continue session"
+            />
+          ) : (
+            <p>Waiting on the host to continue…</p>
+          )}
         </div>
       )}
     </div>

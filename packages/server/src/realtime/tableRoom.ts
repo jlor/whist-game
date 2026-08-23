@@ -1,5 +1,5 @@
 import type { Server } from "socket.io";
-import { encodeCard, getContract, type Card, type Suit } from "@whist/shared";
+import { CONTRACT_LADDER, encodeCard, getContract, type Card, type Suit } from "@whist/shared";
 import { HandStateMachine, IllegalActionError, type DeclareContractInput } from "../game/handStateMachine.js";
 import type { SeatIndex } from "../game/bidding.js";
 import { SessionManager } from "../game/sessionManager.js";
@@ -16,7 +16,7 @@ import {
   recordScoreLedger,
   recordTrick,
 } from "../persistence/repositories/hands.js";
-import { setSeat, setTableStatus, type TableRecord } from "../persistence/repositories/tables.js";
+import { setBidFloorRank, setSeat, setTableStatus, type TableRecord } from "../persistence/repositories/tables.js";
 import { findUserById } from "../persistence/repositories/users.js";
 
 interface SeatOccupant {
@@ -72,11 +72,42 @@ export class TableRuntime {
     this.broadcastTableState();
   }
 
-  /** Re-links a reconnecting user's socket to their existing seat, if any. */
+  /** Re-links a reconnecting user's socket to their existing seat, if any,
+   * and re-sends whatever private state they'd otherwise have missed (their
+   * hand, and any turn prompt currently waiting on them) — a fresh page
+   * load or reconnect only gets `table:state`'s public snapshot otherwise. */
   attachSocket(userId: string, socketId: string): SeatIndex | null {
     const idx = this.seatIndexForUser(userId);
-    if (idx !== null) this.seats[idx]!.socketId = socketId;
+    if (idx !== null) {
+      this.seats[idx]!.socketId = socketId;
+      this.resyncSeat(idx);
+    }
     return idx;
+  }
+
+  private resyncSeat(seat: SeatIndex): void {
+    if (!this.session) return;
+    const hsm = this.session.current;
+    if (hsm.phase === "complete" || hsm.phase === "all_passed") return;
+
+    this.emitPrivate(seat, "hand:yourCards", { cards: hsm.hands[seat].map(encodeCard) });
+
+    if (hsm.partnerResolution?.status === "secret" && (hsm.partnerResolution as any).partnerSeat === seat) {
+      this.emitPrivate(seat, "partner:youAreSecretPartner", {});
+    }
+
+    if (hsm.phase === "bidding" && hsm.bidding.turnSeat === seat) {
+      this.emitPrivate(seat, "bid:yourTurn", {});
+    } else if (hsm.phase === "declaration" && hsm.declarerSeat === seat) {
+      this.emitPrivate(seat, "contract:yourTurnToDeclare", {
+        eligiblePartnerCardRanks: hsm.eligiblePartnerCardRanksForDeclarer(),
+      });
+    } else if (hsm.phase === "trump_resolution" && hsm.turnSeat === seat) {
+      if (hsm.kittyRevealState) this.emitPrivate(seat, "trump:yourTurnToReveal", {});
+      else this.emitPrivate(seat, "trump:yourTurnToChoose", {});
+    } else if (hsm.phase === "play" && hsm.turnSeat === seat) {
+      this.emitPrivate(seat, "play:yourTurn", { legal: hsm.legalPlaysForCurrentTurn().map(encodeCard) });
+    }
   }
 
   broadcastTableState(): void {
@@ -91,13 +122,23 @@ export class TableRuntime {
       status: this.status,
       seats: this.seats.map((s) => (s ? { userId: s.userId, displayName: s.displayName } : null)),
       phase: this.session?.current.phase ?? null,
+      hostUserId: this.table.createdBy,
+      bidFloorRank: this.table.bidFloorRank,
     };
   }
 
-  startSession(requesterUserId: string): void {
+  startSession(requesterUserId: string, bidFloorRank?: number): void {
     if (this.status !== "lobby") throw new IllegalActionError("session already started");
     if (this.seatedCount() !== 4) throw new IllegalActionError("all 4 seats must be filled");
     if (this.table.createdBy !== requesterUserId) throw new IllegalActionError("only the host can start the session");
+
+    if (bidFloorRank !== undefined) {
+      if (!CONTRACT_LADDER.some((c) => c.ladderRank === bidFloorRank)) {
+        throw new IllegalActionError("invalid bid floor");
+      }
+      this.table.bidFloorRank = bidFloorRank;
+      setBidFloorRank(this.table.id, bidFloorRank);
+    }
 
     this.status = "active";
     setTableStatus(this.table.id, "active");
@@ -138,12 +179,16 @@ export class TableRuntime {
     this.io.to(this.room()).emit(event, payload);
   }
 
-  placeBid(userId: string, contractCode: Parameters<HandStateMachine["placeBid"]>[1]): void {
+  placeBid(
+    userId: string,
+    contractCode: Parameters<HandStateMachine["placeBid"]>[1],
+    subMethod?: Parameters<HandStateMachine["placeBid"]>[2]
+  ): void {
     const seat = this.requireSeat(userId);
     const hsm = this.session!.current;
-    hsm.placeBid(seat, contractCode);
-    recordBid(this.currentHandDbId!, seat, this.bidOrder++, contractCode);
-    this.emitPublic("bid:placed", { seat, contractCode, isPass: contractCode === null });
+    hsm.placeBid(seat, contractCode, subMethod);
+    recordBid(this.currentHandDbId!, seat, this.bidOrder++, contractCode, subMethod);
+    this.emitPublic("bid:placed", { seat, contractCode, subMethod, isPass: contractCode === null });
 
     if (hsm.phase === "all_passed") {
       markHandRedealt(this.currentHandDbId!);
@@ -155,7 +200,7 @@ export class TableRuntime {
       return;
     }
     if (hsm.phase === "declaration") {
-      this.emitPublic("bid:won", { seat: hsm.declarerSeat, contractCode: hsm.contractCode });
+      this.emitPublic("bid:won", { seat: hsm.declarerSeat, contractCode: hsm.contractCode, subMethod: hsm.subMethodCode });
       this.emitPrivate(hsm.declarerSeat, "contract:yourTurnToDeclare", {
         eligiblePartnerCardRanks: hsm.eligiblePartnerCardRanksForDeclarer(),
       });
@@ -206,10 +251,13 @@ export class TableRuntime {
     }
   }
 
+  /** The kitty stays hidden until it's actually exchanged (any cards already
+   * shown via a `tip` reveal are public knowledge, but the rest are not) —
+   * so this only ever announces WHO must decide, never the kitty contents. */
   private promptKittyExchange(): void {
     const hsm = this.session!.current;
     const seat = hsm.turnSeat!;
-    this.emitPrivate(seat, "kitty:cards", { cards: hsm.kitty.map(encodeCard) });
+    this.emitPublic("kitty:awaiting", { seat });
   }
 
   choosePartnerTrump(userId: string, suit: Suit): void {
@@ -250,6 +298,9 @@ export class TableRuntime {
     hsm.performKittyExchange(seat, discard);
     recordKittyExchange(this.currentHandDbId!, seat, discard !== null, cardsOut, cardsIn);
     this.emitPublic("kitty:resolved", { exchanged: discard !== null });
+    if (discard !== null) {
+      this.emitPrivate(seat, "hand:yourCards", { cards: hsm.hands[seat].map(encodeCard) });
+    }
 
     if (hsm.phase === "play") {
       const contract = getContract(hsm.contractCode!);
@@ -353,11 +404,11 @@ export class TableRuntime {
     this.broadcastHandStarted();
   }
 
-  hostAction(userId: string, action: "continueSession" | "closeTable"): void {
+  hostAction(userId: string, action: "continueSession" | "closeTable", bidFloorRank?: number): void {
     if (this.table.createdBy !== userId) throw new IllegalActionError("only the host can do this");
     if (action === "continueSession") {
       if (this.status !== "lobby") throw new IllegalActionError("session is still in progress");
-      this.startSession(userId);
+      this.startSession(userId, bidFloorRank);
     } else {
       this.status = "finished";
       setTableStatus(this.table.id, "finished");

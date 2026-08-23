@@ -1,15 +1,26 @@
 import type { Suit } from "./cards.js";
 
 /**
- * The 13-contract bidding ladder, weakest (rank 1) to strongest (rank 13).
- * A bid must land on a strictly higher ladderRank than the current high bid.
+ * The 16-tier bidding ladder, weakest (rank 1) to strongest (rank 16).
  *
  * This is the single source of truth for the rules engine: game logic
  * dispatches off these fields (trumpMode, winCondition, kittyExchange,
  * exposesHand) rather than branching per contract code, so a correction to
  * any one contract's behavior is a data edit here, not a rules-engine change.
+ *
+ * A bid normally must land on a strictly higher `ladderRank` than the
+ * current high bid. The exception is `submethod_only` tiers (8+, 9+, 10+,
+ * 11+, 12+, 13+): the 4 sub-methods (sans/half/tip/strong) at a given tier
+ * have NO order among themselves — whoever names a DIFFERENT sub-method
+ * than the one currently winning that same tier becomes the new high bid,
+ * with no limit on how many times this can cycle back and forth, until
+ * someone either escalates to a strictly higher tier or the table passes
+ * it out. This is handled in bidding.ts, not by ladderRank alone.
  */
 export type ContractCode =
+  | "eight"
+  | "eight_plus"
+  | "nine"
   | "sol"
   | "nine_plus"
   | "ren_sol"
@@ -47,8 +58,41 @@ export interface ContractDef {
 
 export const CONTRACT_LADDER: ContractDef[] = [
   {
-    code: "sol",
+    code: "eight",
     ladderRank: 1,
+    displayName: "8",
+    pointValue: 2,
+    isSolo: false,
+    trumpMode: "free",
+    winCondition: { type: "at_least", tricks: 8 },
+    kittyExchange: "declarer",
+    exposesHand: "none",
+  },
+  {
+    code: "eight_plus",
+    ladderRank: 2,
+    displayName: "8+",
+    pointValue: 4,
+    isSolo: false,
+    trumpMode: "submethod_only",
+    winCondition: { type: "at_least", tricks: 8 },
+    kittyExchange: "submethod_defined",
+    exposesHand: "none",
+  },
+  {
+    code: "nine",
+    ladderRank: 3,
+    displayName: "9",
+    pointValue: 4,
+    isSolo: false,
+    trumpMode: "free",
+    winCondition: { type: "at_least", tricks: 9 },
+    kittyExchange: "declarer",
+    exposesHand: "none",
+  },
+  {
+    code: "sol",
+    ladderRank: 4,
     displayName: "Sol",
     pointValue: 10,
     isSolo: true,
@@ -59,7 +103,7 @@ export const CONTRACT_LADDER: ContractDef[] = [
   },
   {
     code: "nine_plus",
-    ladderRank: 2,
+    ladderRank: 5,
     displayName: "9+",
     pointValue: 8,
     isSolo: false,
@@ -70,7 +114,7 @@ export const CONTRACT_LADDER: ContractDef[] = [
   },
   {
     code: "ren_sol",
-    ladderRank: 3,
+    ladderRank: 6,
     displayName: "Ren sol",
     pointValue: 20,
     isSolo: true,
@@ -81,7 +125,7 @@ export const CONTRACT_LADDER: ContractDef[] = [
   },
   {
     code: "ten",
-    ladderRank: 4,
+    ladderRank: 7,
     displayName: "10",
     pointValue: 8,
     isSolo: false,
@@ -92,7 +136,7 @@ export const CONTRACT_LADDER: ContractDef[] = [
   },
   {
     code: "ten_plus",
-    ladderRank: 5,
+    ladderRank: 8,
     displayName: "10+",
     pointValue: 16,
     isSolo: false,
@@ -103,7 +147,7 @@ export const CONTRACT_LADDER: ContractDef[] = [
   },
   {
     code: "eleven",
-    ladderRank: 6,
+    ladderRank: 9,
     displayName: "11",
     pointValue: 16,
     isSolo: false,
@@ -114,7 +158,7 @@ export const CONTRACT_LADDER: ContractDef[] = [
   },
   {
     code: "eleven_plus",
-    ladderRank: 7,
+    ladderRank: 10,
     displayName: "11+",
     pointValue: 32,
     isSolo: false,
@@ -125,7 +169,7 @@ export const CONTRACT_LADDER: ContractDef[] = [
   },
   {
     code: "twelve",
-    ladderRank: 8,
+    ladderRank: 11,
     displayName: "12",
     pointValue: 32,
     isSolo: false,
@@ -136,7 +180,7 @@ export const CONTRACT_LADDER: ContractDef[] = [
   },
   {
     code: "twelve_plus",
-    ladderRank: 9,
+    ladderRank: 12,
     displayName: "12+",
     pointValue: 64,
     isSolo: false,
@@ -147,7 +191,7 @@ export const CONTRACT_LADDER: ContractDef[] = [
   },
   {
     code: "thirteen",
-    ladderRank: 10,
+    ladderRank: 13,
     displayName: "13",
     pointValue: 64,
     isSolo: false,
@@ -158,7 +202,7 @@ export const CONTRACT_LADDER: ContractDef[] = [
   },
   {
     code: "thirteen_plus",
-    ladderRank: 11,
+    ladderRank: 14,
     displayName: "13+",
     pointValue: 128,
     isSolo: false,
@@ -169,7 +213,7 @@ export const CONTRACT_LADDER: ContractDef[] = [
   },
   {
     code: "halv_bordlaegger",
-    ladderRank: 12,
+    ladderRank: 15,
     displayName: "Halv bordlægger",
     pointValue: 40,
     isSolo: true,
@@ -185,7 +229,7 @@ export const CONTRACT_LADDER: ContractDef[] = [
   },
   {
     code: "bordlaegger",
-    ladderRank: 13,
+    ladderRank: 16,
     displayName: "Bordlægger",
     pointValue: 80,
     isSolo: true,
@@ -218,6 +262,7 @@ export interface SubMethodDef {
   kittyExchangePerformedBy: "declarer" | "partner";
 }
 
+/** No order among these — see the CONTRACT_LADDER doc comment above. */
 export const SUB_METHODS: SubMethodDef[] = [
   {
     code: "sans",

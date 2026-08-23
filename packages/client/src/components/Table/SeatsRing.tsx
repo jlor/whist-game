@@ -22,6 +22,9 @@ export default function SeatsRing() {
           ) : (
             <span className="empty">empty</span>
           )}
+          {occupant && seatIndex === state.mySeat && state.tableStatus === "lobby" && (
+            <button onClick={() => actions.leaveSeat()}>Stand up</button>
+          )}
           {seatIndex === state.dealerSeat && <span className="badge">dealer</span>}
           {seatIndex === state.declarerSeat && <span className="badge">declarer</span>}
           {seatIndex === state.partnerSeat && <span className="badge">partner</span>}

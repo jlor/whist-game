@@ -46,6 +46,10 @@ export function setTableStatus(id: string, status: TableRecord["status"]): void 
   db.update(tables).set({ status }).where(eq(tables.id, id)).run();
 }
 
+export function setBidFloorRank(id: string, bidFloorRank: number): void {
+  db.update(tables).set({ bidFloorRank }).where(eq(tables.id, id)).run();
+}
+
 export function getSeats(tableId: string): { seatIndex: number; userId: string | null }[] {
   return db
     .select({ seatIndex: tableSeats.seatIndex, userId: tableSeats.userId })
