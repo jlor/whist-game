@@ -239,6 +239,10 @@ export class TableRuntime {
   private afterDeclarationRouting(): void {
     const hsm = this.session!.current;
     if (hsm.phase === "trump_resolution") {
+      // Everyone needs to know we're in this phase (so a `tip` reveal is
+      // actually visible to the whole table, not just the actor) — only the
+      // acting seat additionally gets told it's their move.
+      this.emitPublic("trump:awaiting", { seat: hsm.turnSeat, mode: hsm.kittyRevealState ? "reveal" : "choose" });
       if (hsm.kittyRevealState) {
         this.emitPrivate(hsm.declarerSeat, "trump:yourTurnToReveal", {});
       } else {

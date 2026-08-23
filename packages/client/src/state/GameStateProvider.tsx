@@ -16,6 +16,7 @@ const EVENT_NAMES = [
   "contract:declared",
   "partner:youAreSecretPartner",
   "partner:revealed",
+  "trump:awaiting",
   "trump:yourTurnToReveal",
   "trump:yourTurnToChoose",
   "trump:kittyCardRevealed",

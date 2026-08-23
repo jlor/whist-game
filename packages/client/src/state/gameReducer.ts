@@ -140,6 +140,7 @@ export type GameAction =
   | { type: "contract:declared"; payload: any }
   | { type: "partner:youAreSecretPartner" }
   | { type: "partner:revealed"; payload: { seat: number } }
+  | { type: "trump:awaiting"; payload: { seat: number; mode: "reveal" | "choose" } }
   | { type: "trump:yourTurnToReveal" }
   | { type: "trump:yourTurnToChoose" }
   | { type: "trump:kittyCardRevealed"; payload: { card: string; index: number } }
@@ -251,6 +252,9 @@ export function createGameReducer(myUserId: string | null) {
       case "partner:revealed":
         return { ...state, partnerSeat: action.payload.seat, partnerStatus: "revealed" };
 
+      case "trump:awaiting":
+        return { ...state, phase: "trump_resolution" };
+
       case "trump:yourTurnToReveal":
         return { ...state, phase: "trump_resolution", awaitingTipStop: true };
 
@@ -278,14 +282,18 @@ export function createGameReducer(myUserId: string | null) {
         return { ...state, exposedHand: action.payload, phase: "play" };
 
       case "play:turnChanged":
-        return { ...state, playTurnSeat: action.payload.seat };
+        return { ...state, phase: "play", playTurnSeat: action.payload.seat };
 
       case "play:yourTurn":
         return { ...state, phase: "play", myTurnToPlay: true, legalPlays: action.payload.legal };
 
       case "play:cardPlayed": {
         const trick = [...state.currentTrick, { seat: action.payload.seat, card: action.payload.card }];
-        return { ...state, currentTrick: trick, myTurnToPlay: false, legalPlays: null };
+        const myCards =
+          action.payload.seat === state.mySeat
+            ? state.myCards.filter((c) => c !== action.payload.card)
+            : state.myCards;
+        return { ...state, currentTrick: trick, myCards, myTurnToPlay: false, legalPlays: null };
       }
 
       case "trick:won":

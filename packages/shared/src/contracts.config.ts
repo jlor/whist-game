@@ -287,7 +287,7 @@ export const SUB_METHODS: SubMethodDef[] = [
   },
   {
     code: "strong",
-    displayName: "Stærke",
+    displayName: "Good",
     trumpResolution: "fixed",
     fixedTrumpSuit: "clubs",
     partnerRevealTiming: "on_card_played",
