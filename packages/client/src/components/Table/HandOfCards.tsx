@@ -1,13 +1,14 @@
 import { useGame } from "../../state/GameStateProvider.js";
-import { formatCard } from "../../cardDisplay.js";
+import { formatCard, sortHand } from "../../cardDisplay.js";
 
 export default function HandOfCards() {
   const { state, actions } = useGame();
   const legal = new Set(state.legalPlays ?? []);
+  const sorted = sortHand(state.myCards, state.contractCode);
 
   return (
     <div className="hand-of-cards">
-      {state.myCards.map((code) => {
+      {sorted.map((code) => {
         const { label, color } = formatCard(code);
         const isLegal = !state.myTurnToPlay || legal.has(code);
         return (

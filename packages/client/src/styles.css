@@ -222,3 +222,11 @@ select {
   opacity: 0.8;
   margin-right: 0.2rem;
 }
+
+.contract-status-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  font-size: 0.9em;
+}

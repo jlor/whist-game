@@ -18,6 +18,9 @@ export interface BiddingState {
   dealerSeat: SeatIndex;
   bidFloorRank: number;
   turnSeat: SeatIndex;
+  /** Once a seat passes it's permanently out of this auction — passing is
+   * not "yielding the floor," it's dropping out entirely. Indexed by seat. */
+  passed: [boolean, boolean, boolean, boolean];
   highBid: {
     seat: SeatIndex;
     contractCode: ContractCode;
@@ -25,7 +28,6 @@ export interface BiddingState {
     ladderRank: number;
   } | null;
   bids: BidRecord[];
-  passesInRow: number;
   isComplete: boolean;
   allPassed: boolean;
   winner: { seat: SeatIndex; contractCode: ContractCode; subMethod?: SubMethodCode } | null;
@@ -33,6 +35,32 @@ export interface BiddingState {
 
 function nextSeat(seat: SeatIndex): SeatIndex {
   return (((seat + 1) % 4) as SeatIndex);
+}
+
+function nextActiveSeat(fromSeat: SeatIndex, passed: readonly boolean[]): SeatIndex {
+  let seat = nextSeat(fromSeat);
+  let guard = 0;
+  while (passed[seat]) {
+    seat = nextSeat(seat);
+    if (++guard > 4) throw new Error("no active seats remain");
+  }
+  return seat;
+}
+
+function activeCount(passed: readonly boolean[]): number {
+  return passed.filter((p) => !p).length;
+}
+
+/** Which sub-methods have already been named at this tier during this
+ * auction — once used, a sub-method can never be picked again at that tier
+ * for the rest of the auction, by anyone, even after another sub-method has
+ * since taken over the high bid. */
+function usedSubMethodsAtTier(bids: readonly BidRecord[], contractCode: ContractCode): Set<SubMethodCode> {
+  const used = new Set<SubMethodCode>();
+  for (const bid of bids) {
+    if (bid.contractCode === contractCode && bid.subMethod) used.add(bid.subMethod);
+  }
+  return used;
 }
 
 /** Bidding always opens with the seat to the dealer's left. */
@@ -44,9 +72,9 @@ export function createBiddingState(
     dealerSeat,
     bidFloorRank,
     turnSeat: nextSeat(dealerSeat),
+    passed: [false, false, false, false],
     highBid: null,
     bids: [],
-    passesInRow: 0,
     isComplete: false,
     allPassed: false,
     winner: null,
@@ -57,12 +85,17 @@ export class IllegalBidError extends Error {}
 
 /**
  * A bid at a `submethod_only` tier (8+, 9+, 10+, 11+, 12+, 13+) must name
- * one of the 4 sub-methods. Sub-methods have NO order among themselves: a
- * bid at the SAME tier as the current high bid is legal as long as its
- * sub-method differs from the current one — this can cycle indefinitely
- * among up to 4 players/sub-methods until someone escalates to a strictly
- * higher tier or the table passes it out. A bid at any other tier follows
- * the normal strictly-ascending rule.
+ * one of the 4 sub-methods. Sub-methods have NO order among themselves, but
+ * each can only be used ONCE per tier per auction: a bid at the SAME tier
+ * as the current high bid is legal only if its sub-method hasn't already
+ * been named at that tier this auction (by anyone, at any point) — once all
+ * 4 are exhausted at a tier, the only options left are escalating to a
+ * strictly higher tier or passing.
+ *
+ * Passing is permanent: a seat that passes is out of the auction entirely
+ * and never gets another turn. The auction ends the instant only one active
+ * seat remains — immediately if they already hold the high bid (no one is
+ * left to challenge them), or via a redeal if nobody ever bid.
  */
 export function placeBid(
   state: BiddingState,
@@ -72,20 +105,22 @@ export function placeBid(
 ): BiddingState {
   if (state.isComplete) throw new IllegalBidError("bidding is already complete");
   if (seat !== state.turnSeat) throw new IllegalBidError("not this seat's turn");
+  if (state.passed[seat]) throw new IllegalBidError("this seat has already passed and is out of the auction");
 
   const bids = [...state.bids, { seat, contractCode, subMethod }];
 
   if (contractCode === null) {
-    const passesInRow = state.passesInRow + 1;
+    const passed = [...state.passed] as [boolean, boolean, boolean, boolean];
+    passed[seat] = true;
 
-    if (state.highBid === null && passesInRow === 4) {
-      return { ...state, bids, passesInRow, isComplete: true, allPassed: true };
+    if (activeCount(passed) === 0) {
+      return { ...state, bids, passed, isComplete: true, allPassed: true };
     }
-    if (state.highBid !== null && passesInRow === 3) {
+    if (activeCount(passed) === 1 && state.highBid !== null) {
       return {
         ...state,
         bids,
-        passesInRow,
+        passed,
         isComplete: true,
         winner: {
           seat: state.highBid.seat,
@@ -94,7 +129,7 @@ export function placeBid(
         },
       };
     }
-    return { ...state, bids, passesInRow, turnSeat: nextSeat(seat) };
+    return { ...state, bids, passed, turnSeat: nextActiveSeat(seat, passed) };
   }
 
   const contract = getContract(contractCode);
@@ -117,19 +152,20 @@ export function placeBid(
       if (!sameTierSameContract || contract.trumpMode !== "submethod_only") {
         throw new IllegalBidError(`${contractCode} does not outrank the current high bid`);
       }
-      if (subMethod === state.highBid.subMethod) {
-        throw new IllegalBidError("must name a different sub-method than the current high bid");
+      if (usedSubMethodsAtTier(state.bids, contractCode).has(subMethod!)) {
+        throw new IllegalBidError("that sub-method has already been used at this tier this auction");
       }
     }
   }
 
-  return {
-    ...state,
-    bids,
-    passesInRow: 0,
-    highBid: { seat, contractCode, subMethod, ladderRank: contract.ladderRank },
-    turnSeat: nextSeat(seat),
-  };
+  const highBid = { seat, contractCode, subMethod, ladderRank: contract.ladderRank };
+
+  if (activeCount(state.passed) === 1) {
+    // Last active seat — no one left to challenge, the auction ends right here.
+    return { ...state, bids, highBid, isComplete: true, winner: { seat, contractCode, subMethod } };
+  }
+
+  return { ...state, bids, highBid, turnSeat: nextActiveSeat(seat, state.passed) };
 }
 
 /** Sanity check used by tests: the ladder's ranks are a strict 1..N sequence. */

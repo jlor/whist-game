@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useGame } from "../../state/GameStateProvider.js";
-import { formatCard } from "../../cardDisplay.js";
+import { formatCard, sortHand } from "../../cardDisplay.js";
 
 export default function KittyExchangeModal() {
   const { state, actions } = useGame();
@@ -40,15 +40,19 @@ export default function KittyExchangeModal() {
       </p>
       <p>Pick exactly 3 cards from your hand to swap for the kitty blind, or decline (all-or-none).</p>
       <div className="hand-of-cards">
-        {state.myCards.map((code) => (
-          <button
-            key={code}
-            className={"playing-card" + (selected.includes(code) ? " selected" : "")}
-            onClick={() => toggle(code)}
-          >
-            {formatCard(code).label}
-          </button>
-        ))}
+        {sortHand(state.myCards, state.contractCode).map((code) => {
+          const { label, color } = formatCard(code);
+          return (
+            <button
+              key={code}
+              className={"playing-card" + (selected.includes(code) ? " selected" : "")}
+              style={{ color }}
+              onClick={() => toggle(code)}
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
       <div className="actions">
         <button disabled={selected.length !== 3} onClick={() => actions.performKittyExchange(selected)}>

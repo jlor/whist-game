@@ -11,6 +11,7 @@ import TrickArea from "../components/Table/TrickArea.js";
 import Scoreboard from "../components/Table/Scoreboard.js";
 import PartnerRevealToast from "../components/Table/PartnerRevealToast.js";
 import BidFloorPicker from "../components/Table/BidFloorPicker.js";
+import ContractStatusBar from "../components/Table/ContractStatusBar.js";
 
 export default function TablePage() {
   const { code } = useParams<{ code: string }>();
@@ -40,6 +41,7 @@ export default function TablePage() {
         <p>Waiting on the host to start the session…</p>
       )}
 
+      <ContractStatusBar />
       <BiddingPanel />
       <ContractDeclarationPanel />
       <TrumpTipRevealPanel />

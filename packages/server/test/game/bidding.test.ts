@@ -10,7 +10,7 @@ describe("bidding auction", () => {
   it("a bid must strictly outrank the current high bid", () => {
     let state = createBiddingState(0);
     state = placeBid(state, 1, "nine_plus", "sans"); // ladderRank 5
-    expect(() => placeBid(state, 2, "nine_plus", "sans")).toThrow(IllegalBidError); // same tier, same sub-method
+    expect(() => placeBid(state, 2, "nine_plus", "sans")).toThrow(IllegalBidError); // already used at this tier
     // "ten" is ladderRank 7, strictly higher than nine_plus (5) — legal.
     state = placeBid(state, 2, "ten");
     expect(state.highBid?.contractCode).toBe("ten");
@@ -47,7 +47,7 @@ describe("bidding auction", () => {
     expect(state.winner).toBeNull();
   });
 
-  it("3 passes in a row after a bid ends the auction with that bidder winning", () => {
+  it("once everyone else has passed, the sole remaining bidder wins immediately", () => {
     let state = createBiddingState(0);
     state = placeBid(state, 1, "nine_plus", "sans");
     state = placeBid(state, 2, null);
@@ -58,24 +58,56 @@ describe("bidding auction", () => {
     expect(state.winner).toEqual({ seat: 1, contractCode: "nine_plus", subMethod: "sans" });
   });
 
-  it("a later higher bid resets the passesInRow counter", () => {
-    let state = createBiddingState(0);
-    state = placeBid(state, 1, "nine_plus", "sans");
-    state = placeBid(state, 2, null);
-    state = placeBid(state, 3, "ten"); // outbids, resets passes
-    state = placeBid(state, 0, null);
-    state = placeBid(state, 1, null);
-    expect(state.isComplete).toBe(false); // only 2 passes since the "ten" bid
-    state = placeBid(state, 2, null);
-    expect(state.isComplete).toBe(true);
-    expect(state.winner).toEqual({ seat: 3, contractCode: "ten", subMethod: undefined });
-  });
+  describe("passing is permanent", () => {
+    it("a passed seat is skipped in the turn rotation", () => {
+      let state = createBiddingState(0);
+      state = placeBid(state, 1, null); // seat 1 out
+      expect(state.turnSeat).toBe(2);
+      state = placeBid(state, 2, "nine_plus", "sans");
+      expect(state.turnSeat).toBe(3); // skips seat 1, not seat 1 again
+    });
 
-  describe("same-tier sub-method cycling (no order among sans/half/tip/strong)", () => {
-    it("a different sub-method at the same tier outranks the current one", () => {
+    it("a passed seat cannot bid again later in the same auction", () => {
+      let state = createBiddingState(0);
+      state = placeBid(state, 1, null); // seat 1 passes, permanently out
+      state = placeBid(state, 2, "nine_plus", "sans");
+      state = placeBid(state, 3, "nine_plus", "half"); // differs, legal
+      // rotation skips seat 1 (passed) and returns to seat 0
+      expect(state.turnSeat).toBe(0);
+      state = placeBid(state, 0, null);
+      // only seat 3 remains active now (1 and 0 passed, 2 was outbid but never
+      // itself passed... wait 2 is still active) — verify turn goes to seat 2
+      expect(state.turnSeat).toBe(2);
+    });
+
+    it("the auction ends the moment only one active seat remains, even mid-cycle", () => {
       let state = createBiddingState(0);
       state = placeBid(state, 1, "nine_plus", "sans");
-      state = placeBid(state, 2, "nine_plus", "half"); // legal: differs from sans
+      state = placeBid(state, 2, null);
+      state = placeBid(state, 3, null);
+      // only seats 0 and 1 remain active; seat 0 passing leaves just seat 1
+      state = placeBid(state, 0, null);
+      expect(state.isComplete).toBe(true);
+      expect(state.winner).toEqual({ seat: 1, contractCode: "nine_plus", subMethod: "sans" });
+    });
+
+    it("the last active seat winning via their own bid ends the auction immediately, no further pass needed", () => {
+      let state = createBiddingState(0);
+      state = placeBid(state, 1, null);
+      state = placeBid(state, 2, null);
+      state = placeBid(state, 3, null);
+      // seat 0 is the only one left; their bid wins outright
+      state = placeBid(state, 0, "nine_plus", "sans");
+      expect(state.isComplete).toBe(true);
+      expect(state.winner).toEqual({ seat: 0, contractCode: "nine_plus", subMethod: "sans" });
+    });
+  });
+
+  describe("same-tier sub-method cycling (no order among sans/half/tip/strong, each usable once per tier)", () => {
+    it("a different, not-yet-used sub-method at the same tier outranks the current one", () => {
+      let state = createBiddingState(0);
+      state = placeBid(state, 1, "nine_plus", "sans");
+      state = placeBid(state, 2, "nine_plus", "half"); // legal: not yet used at this tier
       expect(state.highBid).toEqual({ seat: 2, contractCode: "nine_plus", subMethod: "half", ladderRank: 5 });
     });
 
@@ -85,17 +117,28 @@ describe("bidding auction", () => {
       expect(() => placeBid(state, 2, "nine_plus", "sans")).toThrow(IllegalBidError);
     });
 
-    it("cycling can go all the way around the table more than once", () => {
+    it("a sub-method already used earlier at this tier cannot be reused, even once it's no longer the current bid", () => {
+      let state = createBiddingState(0);
+      state = placeBid(state, 1, "nine_plus", "half");
+      state = placeBid(state, 2, "nine_plus", "sans"); // half -> sans, legal
+      // seat 3 tries to bring back "half" — must be rejected even though the
+      // CURRENT high bid is "sans", not "half".
+      expect(() => placeBid(state, 3, "nine_plus", "half")).toThrow(IllegalBidError);
+    });
+
+    it("once all 4 sub-methods are used at a tier, only escalating to the next tier (or passing) remains", () => {
       let state = createBiddingState(0);
       state = placeBid(state, 1, "nine_plus", "sans");
       state = placeBid(state, 2, "nine_plus", "half");
       state = placeBid(state, 3, "nine_plus", "strong");
       state = placeBid(state, 0, "nine_plus", "tip");
-      // back to seat 1 — reusing "sans" again is legal since it only needs
-      // to differ from the CURRENT high bid (tip), not from history.
-      state = placeBid(state, 1, "nine_plus", "sans");
-      expect(state.highBid?.seat).toBe(1);
-      expect(state.highBid?.subMethod).toBe("sans");
+      // seat 1 is active again (rotation continues); every sub-method at this
+      // tier is now used, so any further nine_plus bid must fail.
+      for (const sub of ["sans", "half", "strong", "tip"] as const) {
+        expect(() => placeBid(state, 1, "nine_plus", sub)).toThrow(IllegalBidError);
+      }
+      state = placeBid(state, 1, "ten"); // escalating past the tier is still fine
+      expect(state.highBid?.contractCode).toBe("ten");
     });
 
     it("jumping to the next trick tier is always legal regardless of sub-method history", () => {

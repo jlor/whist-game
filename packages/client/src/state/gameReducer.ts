@@ -76,6 +76,8 @@ export interface GameState {
   myTurnToPlay: boolean;
   legalPlays: string[] | null;
   lastTrickWinner: { winnerSeat: number; trickNumber: number } | null;
+  /** One entry per completed trick this hand, in order — used to tally tricks per side. */
+  trickWinners: number[];
 
   lastHandResult: HandCompletePayload | null;
   sessionComplete: SessionCompletePayload | null;
@@ -119,6 +121,7 @@ export const initialGameState: GameState = {
   myTurnToPlay: false,
   legalPlays: null,
   lastTrickWinner: null,
+  trickWinners: [],
   lastHandResult: null,
   sessionComplete: null,
   errors: [],
@@ -286,7 +289,12 @@ export function createGameReducer(myUserId: string | null) {
       }
 
       case "trick:won":
-        return { ...state, currentTrick: [], lastTrickWinner: action.payload };
+        return {
+          ...state,
+          currentTrick: [],
+          lastTrickWinner: action.payload,
+          trickWinners: [...state.trickWinners, action.payload.winnerSeat],
+        };
 
       case "hand:complete":
         return { ...state, phase: "complete", lastHandResult: action.payload };

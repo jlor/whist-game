@@ -11,10 +11,17 @@ export default function TrickArea() {
       <div className="trick-cards">
         {[0, 1, 2, 3].map((seat) => {
           const play = state.currentTrick.find((p) => p.seat === seat);
+          const formatted = play ? formatCard(play.card) : null;
           return (
             <div key={seat} className="trick-slot">
               <div className="seat-label">Seat {seat + 1}</div>
-              {play ? <span className="playing-card">{formatCard(play.card).label}</span> : <span className="empty-slot" />}
+              {formatted ? (
+                <span className="playing-card" style={{ color: formatted.color }}>
+                  {formatted.label}
+                </span>
+              ) : (
+                <span className="empty-slot" />
+              )}
             </div>
           );
         })}
@@ -24,8 +31,6 @@ export default function TrickArea() {
           Trick {state.lastTrickWinner.trickNumber} won by seat {state.lastTrickWinner.winnerSeat + 1}
         </p>
       )}
-      {state.trumpSuit && <p>Trump: {state.trumpSuit}</p>}
-      {!state.trumpSuit && state.phase === "play" && <p>No trump this hand</p>}
     </div>
   );
 }
