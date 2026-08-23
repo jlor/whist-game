@@ -223,6 +223,10 @@ export class TableRuntime {
       subMethod: hsm.subMethodCode,
       trumpSuit: hsm.trumpSuit ?? undefined,
       partnerStatus,
+      // Safe to reveal only once the partner card itself isn't a secret —
+      // needed so whoever picks trump under `half` knows which suit is off
+      // limits (trump can't match the partner card's suit).
+      partnerCardSuit: partnerStatus === "secret" ? undefined : hsm.namedPartnerCard?.suit,
     });
 
     if (partnerStatus === "secret") {

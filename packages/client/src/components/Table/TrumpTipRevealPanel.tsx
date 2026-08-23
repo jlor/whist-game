@@ -38,7 +38,7 @@ export default function TrumpTipRevealPanel() {
 
       {state.awaitingTrumpChoice && (
         <div className="actions">
-          <SuitPicker value={suit} onChange={setSuit} />
+          <SuitPicker value={suit} onChange={setSuit} excludeSuit={state.partnerCardSuit as Suit | null} />
           <button disabled={!suit} onClick={() => actions.choosePartnerTrump(suit!)}>
             Choose trump
           </button>

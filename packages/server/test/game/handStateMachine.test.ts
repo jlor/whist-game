@@ -223,6 +223,55 @@ describe("HandStateMachine — half sub-method", () => {
   });
 });
 
+describe("HandStateMachine — Good (strong) can't name a partner card in its fixed trump suit", () => {
+  it("rejects a partner card in clubs, the fixed trump suit", () => {
+    const hsm = new HandStateMachine(0);
+    const { hands, kitty } = sequentialDeal();
+    forceDeal(hsm, hands, kitty);
+
+    bidAllPassExcept(hsm, 0, 1, "nine_plus", "strong");
+    expect(() =>
+      hsm.declareContract({ contractCode: "nine_plus", partnerCard: { rank: "A", suit: "clubs" } })
+    ).toThrow();
+  });
+
+  it("accepts a partner card in any other suit", () => {
+    const hsm = new HandStateMachine(0);
+    const { hands, kitty } = sequentialDeal();
+    forceDeal(hsm, hands, kitty);
+
+    bidAllPassExcept(hsm, 0, 1, "nine_plus", "strong");
+    hsm.declareContract({ contractCode: "nine_plus", partnerCard: { rank: "A", suit: "hearts" } });
+    expect(hsm.trumpSuit).toBe("clubs");
+    expect(hsm.phase).toBe("kitty_exchange");
+  });
+});
+
+describe("HandStateMachine — Halv trump choice can't match the partner card's suit", () => {
+  it("rejects trump equal to the named partner card's suit", () => {
+    const hsm = new HandStateMachine(0);
+    const { hands, kitty } = sequentialDeal();
+    forceDeal(hsm, hands, kitty);
+
+    bidAllPassExcept(hsm, 0, 1, "nine_plus", "half");
+    hsm.declareContract({ contractCode: "nine_plus", partnerCard: { rank: "A", suit: "clubs" } });
+    const actor = hsm.turnSeat!;
+    expect(() => hsm.choosePartnerTrump(actor, "clubs")).toThrow();
+  });
+
+  it("accepts trump in any other suit", () => {
+    const hsm = new HandStateMachine(0);
+    const { hands, kitty } = sequentialDeal();
+    forceDeal(hsm, hands, kitty);
+
+    bidAllPassExcept(hsm, 0, 1, "nine_plus", "half");
+    hsm.declareContract({ contractCode: "nine_plus", partnerCard: { rank: "A", suit: "clubs" } });
+    const actor = hsm.turnSeat!;
+    hsm.choosePartnerTrump(actor, "spades");
+    expect(hsm.trumpSuit).toBe("spades");
+  });
+});
+
 describe("HandStateMachine — all-pass redeal", () => {
   it("marks the hand all_passed without a declarer", () => {
     const hsm = new HandStateMachine(0);

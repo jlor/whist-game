@@ -16,7 +16,12 @@ export default function SeatsRing() {
           }
         >
           {occupant ? (
-            <span>{occupant.displayName}</span>
+            <span>
+              {occupant.displayName}
+              {occupant.userId in state.runningTotals && (
+                <span className="live-score"> ({state.runningTotals[occupant.userId]})</span>
+              )}
+            </span>
           ) : state.tableStatus === "lobby" ? (
             <button onClick={() => actions.takeSeat(seatIndex)}>Sit here</button>
           ) : (

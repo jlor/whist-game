@@ -57,6 +57,9 @@ export interface GameState {
   subMethod: string | null;
   trumpSuit: string | null;
   partnerStatus: "solo" | "secret" | "revealed" | null;
+  /** Only populated once safe to reveal (partnerStatus !== "secret") — the
+   * suit trump can't match under Halv. */
+  partnerCardSuit: string | null;
   partnerSeat: number | null;
   eligiblePartnerCardRanks: string[] | null;
   amSecretPartner: boolean;
@@ -76,8 +79,14 @@ export interface GameState {
   myTurnToPlay: boolean;
   legalPlays: string[] | null;
   lastTrickWinner: { winnerSeat: number; trickNumber: number } | null;
+  /** The full card-by-seat contents of the last completed trick — kept
+   * visible on request, not just the fleeting moment before the next trick. */
+  lastCompletedTrick: TrickCardEntry[];
   /** One entry per completed trick this hand, in order — used to tally tricks per side. */
   trickWinners: number[];
+
+  /** Live running total per userId — persists across hands within a session. */
+  runningTotals: Record<string, number>;
 
   lastHandResult: HandCompletePayload | null;
   sessionComplete: SessionCompletePayload | null;
@@ -108,6 +117,7 @@ export const initialGameState: GameState = {
   subMethod: null,
   trumpSuit: null,
   partnerStatus: null,
+  partnerCardSuit: null,
   partnerSeat: null,
   eligiblePartnerCardRanks: null,
   amSecretPartner: false,
@@ -121,7 +131,9 @@ export const initialGameState: GameState = {
   myTurnToPlay: false,
   legalPlays: null,
   lastTrickWinner: null,
+  lastCompletedTrick: [],
   trickWinners: [],
+  runningTotals: {},
   lastHandResult: null,
   sessionComplete: null,
   errors: [],
@@ -199,6 +211,7 @@ export function createGameReducer(myUserId: string | null) {
           hostUserId: state.hostUserId,
           amHost: state.amHost,
           bidFloorRank: state.bidFloorRank,
+          runningTotals: state.runningTotals,
           phase: "bidding",
           dealerSeat: action.payload.dealerSeat,
           handNumber: action.payload.handNumber,
@@ -244,6 +257,7 @@ export function createGameReducer(myUserId: string | null) {
           subMethod: action.payload.subMethod ?? null,
           trumpSuit: action.payload.trumpSuit ?? null,
           partnerStatus: action.payload.partnerStatus,
+          partnerCardSuit: action.payload.partnerCardSuit ?? null,
         };
 
       case "partner:youAreSecretPartner":
@@ -300,15 +314,19 @@ export function createGameReducer(myUserId: string | null) {
         return {
           ...state,
           currentTrick: [],
+          lastCompletedTrick: state.currentTrick,
           lastTrickWinner: action.payload,
           trickWinners: [...state.trickWinners, action.payload.winnerSeat],
         };
 
-      case "hand:complete":
-        return { ...state, phase: "complete", lastHandResult: action.payload };
+      case "hand:complete": {
+        const runningTotals = { ...state.runningTotals };
+        for (const entry of action.payload.ledger) runningTotals[entry.userId] = entry.runningTotal;
+        return { ...state, phase: "complete", lastHandResult: action.payload, runningTotals };
+      }
 
       case "session:complete":
-        return { ...state, phase: "session_complete", sessionComplete: action.payload };
+        return { ...state, phase: "session_complete", sessionComplete: action.payload, runningTotals: {} };
 
       case "table:closed":
         return { ...state, tableStatus: "finished" };

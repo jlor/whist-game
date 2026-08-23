@@ -223,6 +223,15 @@ select {
   margin-right: 0.2rem;
 }
 
+.live-score {
+  font-weight: bold;
+  opacity: 0.85;
+}
+
+.last-trick {
+  margin-top: 0.5rem;
+}
+
 .contract-status-bar {
   display: flex;
   flex-wrap: wrap;

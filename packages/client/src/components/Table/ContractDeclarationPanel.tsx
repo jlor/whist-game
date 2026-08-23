@@ -12,7 +12,8 @@ export default function ContractDeclarationPanel() {
   if (state.phase !== "declaration" || state.mySeat !== state.declarerSeat || !state.contractCode) return null;
 
   const contract = getContract(state.contractCode as any);
-  const subMethodName = state.subMethod ? SUB_METHODS.find((s) => s.code === state.subMethod)?.displayName : null;
+  const subMethodDef = state.subMethod ? SUB_METHODS.find((s) => s.code === state.subMethod) : null;
+  const fixedTrumpSuit = subMethodDef?.fixedTrumpSuit as Suit | undefined;
   const canSubmit = (contract.trumpMode !== "free" || trumpSuit !== null) && (contract.isSolo || partnerCard !== null);
 
   function submit() {
@@ -26,9 +27,10 @@ export default function ContractDeclarationPanel() {
   return (
     <div className="panel">
       <h3>You won the bid: {contract.displayName}</h3>
-      {subMethodName && (
+      {subMethodDef && (
         <p>
-          Trump method (locked in from your bid): <strong>{subMethodName}</strong>
+          Trump method (locked in from your bid): <strong>{subMethodDef.displayName}</strong>
+          {fixedTrumpSuit && ` — trump is fixed to ${fixedTrumpSuit}`}
         </p>
       )}
 
@@ -46,6 +48,7 @@ export default function ContractDeclarationPanel() {
             eligibleRanks={state.eligiblePartnerCardRanks ?? ["A"]}
             value={partnerCard}
             onChange={setPartnerCard}
+            excludeSuit={fixedTrumpSuit ?? null}
           />
         </fieldset>
       )}

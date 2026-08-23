@@ -130,6 +130,14 @@ export class HandStateMachine {
     if (!contract.isSolo && !input.partnerCard) {
       throw new IllegalActionError("this contract requires a named partner card");
     }
+    // Good ("strong") fixes trump to a known suit up front — the partner
+    // card can never be named in that same suit.
+    if (this.subMethodCode) {
+      const fixedTrump = getSubMethod(this.subMethodCode).fixedTrumpSuit;
+      if (fixedTrump && input.partnerCard?.suit === fixedTrump) {
+        throw new IllegalActionError(`the partner card cannot be in ${fixedTrump} — that's this contract's fixed trump suit`);
+      }
+    }
 
     this.namedPartnerCard = input.partnerCard;
 
@@ -196,6 +204,9 @@ export class HandStateMachine {
   choosePartnerTrump(seat: SeatIndex, suit: Suit): void {
     if (this.phase !== "trump_resolution") throw new IllegalActionError("not resolving trump");
     if (seat !== this.turnSeat) throw new IllegalActionError("not this seat's turn to choose trump");
+    if (this.namedPartnerCard!.suit === suit) {
+      throw new IllegalActionError("trump cannot be the same suit as the named partner card");
+    }
     this.trumpSuit = suit;
     const subMethod = getSubMethod(this.subMethodCode!);
     this.beginKittyExchange(this.kittyExchangePerformer(subMethod.kittyExchangePerformedBy));
